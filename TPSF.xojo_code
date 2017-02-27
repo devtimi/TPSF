@@ -8,15 +8,21 @@ Protected Module TPSF
 
 	#tag Method, Flags = &h1
 		Protected Function AppSupport() As FolderItem
-		  Dim rValue as folderitem = SpecialFolder.ApplicationData
-		  #if TargetMacOS then
-		    if rValue <> nil then rvalue = rvalue.child(app.BundleIdentifier)
-		  #elseif TargetWin32 then
-		    dim appName as String = ReplaceAll(App.ExecutableFile.Name, ".exe", "")
-		    if rValue <> nil then rvalue = rvalue.child(appName)
-		  #endif
+		  dim fReturn as FolderItem = SpecialFolder.ApplicationData
 		  
-		  Return rvalue
+		  // Prevent NOEs
+		  if fReturn = nil then return nil
+		  
+		  #if TargetMacOS then
+		    return fReturn.Child(App.BundleIdentifier)
+		    
+		  #elseif TargetWin32 then
+		    return fReturn.Child(ThisAppName)
+		    
+		  #elseif TargetLinux then
+		    return fReturn.Child("." + ThisAppName)
+		    
+		  #endif
 		End Function
 	#tag EndMethod
 
@@ -27,10 +33,10 @@ Protected Module TPSF
 		  
 		  #if TargetMacOS
 		    if mBundleIdentifier = "" then
-		      declare function mainBundle lib "AppKit" selector "mainBundle" ( NSBundleClass as Ptr ) as Ptr
-		      declare function NSClassFromString lib "AppKit" ( className as CFStringRef ) as Ptr
-		      declare function getValue lib "AppKit" selector "bundleIdentifier" ( NSBundleRef as Ptr ) as CfStringRef
-		      mBundleIdentifier = getValue( mainBundle( NSClassFromString( "NSBundle" ) ) )
+		      declare function mainBundle lib "AppKit" selector "mainBundle" (NSBundleClass as Ptr) as Ptr
+		      declare function NSClassFromString lib "AppKit" (className as CFStringRef) as Ptr
+		      declare function getValue lib "AppKit" selector "bundleIdentifier" (NSBundleRef as Ptr) as CfStringRef
+		      mBundleIdentifier = getValue(mainBundle(NSClassFromString("NSBundle")))
 		    end if
 		  #endif
 		  
@@ -45,15 +51,15 @@ Protected Module TPSF
 		    static mBundlePath as folderitem
 		    
 		    if mBundlePath = nil or mBundlePath.exists = false then
-		      declare function NSClassFromString lib "AppKit" ( className as CFStringRef ) as Ptr
-		      declare function mainBundle lib "AppKit" selector "mainBundle" ( NSBundleClass as Ptr ) as Ptr
-		      declare function resourcePath lib "AppKit" selector "bundlePath" ( NSBundleRef as Ptr ) as CfStringRef
-		      mBundlePath = getFolderItem( resourcePath( mainBundle( NSClassFromString( "NSBundle" ) ) ), folderItem.pathTypeNative )
+		      declare function NSClassFromString lib "AppKit" (className as CFStringRef) as Ptr
+		      declare function mainBundle lib "AppKit" selector "mainBundle" (NSBundleClass as Ptr) as Ptr
+		      declare function resourcePath lib "AppKit" selector "bundlePath" (NSBundleRef as Ptr) as CfStringRef
+		      mBundlePath = GetFolderItem(resourcePath(mainBundle(NSClassFromString( "NSBundle"))), FolderItem.PathTypeNative)
 		    end if
 		    
 		    return mBundlePath
 		    
-		  #elseif TargetWin32 then
+		  #elseif TargetWin32 or TargetLinux then
 		    return App.ExecutableFile.Parent
 		  #endif
 		End Function
@@ -63,7 +69,7 @@ Protected Module TPSF
 		Protected Function Contents() As FolderItem
 		  #if TargetMacOS then
 		    return App.ExecutableFile.Parent.Parent
-		  #elseif TargetWin32 then
+		  #elseif TargetWin32 or TargetLinux then
 		    return App.ExecutableFile.Parent
 		  #endif
 		End Function
@@ -75,23 +81,30 @@ Protected Module TPSF
 		    static mFrameworks as folderitem
 		    
 		    if mFrameworks = nil or mFrameworks.exists = false then
-		      declare function NSClassFromString lib "AppKit" ( className as CFStringRef ) as Ptr
-		      declare function mainBundle lib "AppKit" selector "mainBundle" ( NSBundleClass as Ptr ) as Ptr
-		      declare function resourcePath lib "AppKit" selector "privateFrameworksPath" ( NSBundleRef as Ptr ) as CfStringRef
-		      mFrameworks = getFolderItem( resourcePath( mainBundle( NSClassFromString( "NSBundle" ) ) ), folderItem.pathTypeNative )
+		      declare function NSClassFromString lib "AppKit" (className as CFStringRef) as Ptr
+		      declare function mainBundle lib "AppKit" selector "mainBundle" (NSBundleClass as Ptr) as Ptr
+		      declare function resourcePath lib "AppKit" selector "privateFrameworksPath" (NSBundleRef as Ptr) as CfStringRef
+		      mFrameworks = GetFolderItem(resourcePath(mainBundle(NSClassFromString("NSBundle"))), FolderItem.PathTypeNative)
 		    end if
 		    
 		    return mFrameworks
 		    
-		  #elseif TargetWin32 then
-		    dim libsFolder as FolderItem = App.ExecutableFile.Parent.Child("Libs")
-		    if libsFolder.Exists then
-		      return libsFolder
-		    else
-		      dim pathStringVar as String = App.ExecutableFile.NativePath
-		      pathStringVar = pathStringVar.Left(pathStringVar.Len - 4) + " Libs"
-		      return GetFolderItem(pathStringVar)
+		  #elseif TargetWin32 or TargetLinux then
+		    dim fLibsFolder as FolderItem = App.ExecutableFile.Parent.Child("Libs")
+		    
+		    // Old style libs folder?
+		    if fLibsFolder <> nil and fLibsFolder.exists = true then
+		      return fLibsFolder
 		    end
+		    
+		    // New style libs folder?
+		    fLibsFolder as FolderItem = App.ExecutableFile.Parent.Child(ThisAppName + " Libs")
+		    if fLibsFolder <> nil and fLibsFolder.exists = true
+		      return fLibsFolder
+		    end
+		    
+		    // Neither was found at this point.
+		    return nil
 		  #endif
 		End Function
 	#tag EndMethod
@@ -102,49 +115,73 @@ Protected Module TPSF
 		    static mResourcesFolder as folderitem
 		    
 		    if mResourcesFolder = nil or mResourcesFolder.exists = false then
-		      declare function NSClassFromString lib "AppKit" ( className as CFStringRef ) as Ptr
-		      declare function mainBundle lib "AppKit" selector "mainBundle" ( NSBundleClass as Ptr ) as Ptr
-		      declare function resourcePath lib "AppKit" selector "resourcePath" ( NSBundleRef as Ptr ) as CfStringRef
-		      mResourcesFolder = getFolderItem( resourcePath( mainBundle( NSClassFromString( "NSBundle" ) ) ), folderItem.pathTypeNative )
+		      declare function NSClassFromString lib "AppKit" (className as CFStringRef) as Ptr
+		      declare function mainBundle lib "AppKit" selector "mainBundle" (NSBundleClass as Ptr) as Ptr
+		      declare function resourcePath lib "AppKit" selector "resourcePath" (NSBundleRef as Ptr) as CfStringRef
+		      mResourcesFolder = GetFolderItem(resourcePath(mainBundle(NSClassFromString("NSBundle"))), FolderItem.PathTypeNative)
 		    end if
 		    
 		    return mResourcesFolder
 		    
-		  #elseif TargetWin32 then
-		    dim rsrcFolder as FolderItem = App.ExecutableFile.Parent.Child("Resources")
-		    if rsrcFolder.Exists then
-		      return rsrcFolder
-		    else
-		      dim pathStringVar as String = App.ExecutableFile.NativePath
-		      pathStringVar = pathStringVar.Left(pathStringVar.Len - 4) + " Resources"
-		      return GetFolderItem(pathStringVar)
+		  #elseif TargetWin32 or TargetLinux then
+		    dim fLibsFolder as FolderItem = App.ExecutableFile.Parent.Child("Resources")
+		    
+		    // Old style resources folder?
+		    if fLibsFolder <> nil and fLibsFolder.exists = true then
+		      return fLibsFolder
 		    end
+		    
+		    // New style resources folder?
+		    fLibsFolder as FolderItem = App.ExecutableFile.Parent.Child(ThisAppName + " Resources")
+		    if fLibsFolder <> nil and fLibsFolder.exists = true
+		      return fLibsFolder
+		    end
+		    
+		    // Neither was found at this point.
+		    return nil
 		  #endif
+		End Function
+	#tag EndMethod
+
+	#tag Method, Flags = &h21
+		Private Function ThisAppName() As String
+		  return ReplaceAll(App.ExecutableFile.Name, ".exe", "")
+		  
 		End Function
 	#tag EndMethod
 
 
 	#tag Note, Name = About
-		This module makes it easier to access executable relative files since Xojo does not include a SepcialFolder.Resources or the like.
-		Very large thanks to Sam Rowlands for help with the Mac declares.
+		NOTE: This module requires that your root Application object be named "App"
 		
-		Access "Copy Files" build step folders like:
-		TPSF.AppParent()
-		TPSF.BundleParent()
-		TPSF.Contents()
-		TPSF.Frameworks()
-		TPSF.Resources()
+		About:
+		     This module makes it easier to access executable relative files since Xojo
+		     does not include a SepcialFolder.Resources or the like.
 		
-		Direct access to your own Application Support folder:
-		TPSF.AppSupport()
+		Thanks to:
+		     Sam Rowlands with the Mac declares
+		     Axel Schneider with Linux locations
 		
-		Mac: ~/Library/Application Support/[bundle identifier]
-		Win: \Users\[user]\AppData\Roaming\[app name]
+		Usage:
+		     To access "Copy Files" build step locations:
+		         TPSF.AppParent
+		         TPSF.BundleParent
+		         TPSF.Contents
+		         TPSF.Frameworks
+		         TPSF.Resources
 		
-		On Mac you can get your bundle identifier (via proper Cocoa declares) as an extension of Application,
-		on Windows this returns an empty string.
-		App.BundleIdentifier
 		
+		     Direct access to your own Application Support Folder:
+		         TPSF.AppSupport
+		
+		     This will return a FolderItem with the path:
+		           Mac: ~/Library/Application Support/[bundle identifier]
+		           Win: \Users\[user]\AppData\Roaming\[app name]
+		         Linux: /home/UserName/.[app name]
+		
+		
+		     To get your app's Bundle Identifier via proper Cocoa declares:
+		         App.BundleIdentifier
 	#tag EndNote
 
 
