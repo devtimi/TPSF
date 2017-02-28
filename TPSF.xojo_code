@@ -98,8 +98,8 @@ Protected Module TPSF
 		    end
 		    
 		    // New style libs folder?
-		    fLibsFolder as FolderItem = App.ExecutableFile.Parent.Child(ThisAppName + " Libs")
-		    if fLibsFolder <> nil and fLibsFolder.exists = true
+		    fLibsFolder = App.ExecutableFile.Parent.Child(ThisAppName + " Libs")
+		    if fLibsFolder <> nil and fLibsFolder.exists = true then
 		      return fLibsFolder
 		    end
 		    
@@ -132,8 +132,8 @@ Protected Module TPSF
 		    end
 		    
 		    // New style resources folder?
-		    fLibsFolder as FolderItem = App.ExecutableFile.Parent.Child(ThisAppName + " Resources")
-		    if fLibsFolder <> nil and fLibsFolder.exists = true
+		    fLibsFolder = App.ExecutableFile.Parent.Child(ThisAppName + " Resources")
+		    if fLibsFolder <> nil and fLibsFolder.exists = true then
 		      return fLibsFolder
 		    end
 		    
